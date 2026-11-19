@@ -3,6 +3,7 @@ name = "robotics-take-home"
 version = "0.1.0"
 requires-python = ">=3.9"
 dependencies = [
+    "coacd>=1.0.14",
     "matplotlib",
     "mujoco",
     "numpy",
@@ -10,3 +11,7 @@ dependencies = [
     "scipy",
     "trimesh",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

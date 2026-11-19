@@ -1,0 +1,74 @@
+{
+  "asset01": {
+    "category": "hex bolt",
+    "material": "steel",
+    "longest_m": 0.05,
+    "density_kg_m3": 7850,
+    "friction": 0.4,
+    "note": "Solid part, so density x volume is trustworthy. Mesh is already ~metric."
+  },
+  "asset02": {
+    "category": "open cardboard box",
+    "material": "cardboard",
+    "longest_m": 0.45,
+    "mass_kg": 0.4,
+    "friction": 0.5,
+    "note": "Mesh comes in at 4.3 m. Reconstructed walls are far thicker than 3 mm board, so mass is set directly, not from density."
+  },
+  "asset03": {
+    "category": "cardboard mailer box",
+    "material": "cardboard",
+    "longest_m": 0.4,
+    "mass_kg": 0.2,
+    "friction": 0.5,
+    "note": "Thin-walled; mass set directly for the same reason as asset02."
+  },
+  "asset04": {
+    "category": "plastic stacking crate",
+    "material": "polypropylene",
+    "longest_m": 0.6,
+    "mass_kg": 1.8,
+    "friction": 0.4,
+    "note": "Euro container footprint 600 x 400 mm. Mass from typical spec sheets."
+  },
+  "asset05": {
+    "category": "office chair",
+    "material": "mixed (steel, plastic, foam)",
+    "longest_m": 1.05,
+    "mass_kg": 12.0,
+    "friction": 0.5,
+    "note": "Mesh is 0.70 m tall, real chairs are ~1.0-1.1 m. Casters and swivel are not modelled, so it slides rather than rolls."
+  },
+  "asset06": {
+    "category": "piston and connecting rod",
+    "material": "aluminium piston, steel rod",
+    "longest_m": 0.22,
+    "mass_kg": 0.9,
+    "friction": 0.4,
+    "note": "Two materials in one rigid body, so a single density would be wrong. Mass set directly."
+  },
+  "asset07": {
+    "category": "spray bottle, part full",
+    "material": "PET + liquid",
+    "longest_m": 0.28,
+    "mass_kg": 0.6,
+    "friction": 0.4,
+    "note": "Mesh comes in at 2.8 m. Reconstruction is a filled solid, so liquid is treated as evenly spread through the volume."
+  },
+  "asset08": {
+    "category": "wooden stool",
+    "material": "wood",
+    "longest_m": 0.45,
+    "mass_kg": 3.0,
+    "friction": 0.5,
+    "note": "Seat height ~45 cm."
+  },
+  "asset09": {
+    "category": "wooden table",
+    "material": "wood",
+    "longest_m": 1.2,
+    "mass_kg": 30.0,
+    "friction": 0.5,
+    "note": "Mesh is already ~metric (0.77 m tall). Reconstructed legs are oversized, so mass set directly."
+  }
+}
