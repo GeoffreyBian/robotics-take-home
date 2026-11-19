@@ -11,3 +11,4 @@ wheels/
 
 # Pipeline outputs
 output*/
+.cache/

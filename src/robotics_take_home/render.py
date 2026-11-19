@@ -1,140 +1,84 @@
+"""Previews rendered by MuJoCo from the exported scene, so they show exactly what loads."""
+
 import os
 
 import matplotlib.pyplot as plt
 import mujoco
 import numpy as np
-import trimesh
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
+
+VISUAL_GROUP, COLLISION_GROUP = 2, 3
 
 
-def render_mesh(mesh: trimesh.Trimesh, color):
-    size, supersample = 700, 2  # render at 2x, box-filter down to antialias
-    res = size * supersample
-
-    # orbit the camera around the mesh, which is Z-up by the time it gets here
-    target = mesh.bounds.mean(axis=0)
-    elev, azim = np.radians(25), np.radians(-125)
-    eye = target + mesh.extents.max() * 2.2 * np.array(
-        [np.cos(elev) * np.cos(azim), np.cos(elev) * np.sin(azim), np.sin(elev)]
-    )
-    forward = target - eye
-    forward /= np.linalg.norm(forward)
-    right = np.cross(forward, [0, 0, 1.0])
-    right /= np.linalg.norm(right)
-    basis = np.stack([right, np.cross(right, forward), forward])
-
-    cam = (mesh.vertices - eye) @ basis.T
-    depth = np.clip(cam[:, 2], 1e-6, None)
-    ndc = cam[:, :2] / depth[:, None]
-    # focal length that just fits the projection, so the mesh fills the frame
-    # regardless of how elongated it is or where we view it from
-    focal = (res / 2) * 0.94 / np.abs(ndc).max()
-    screen = np.stack(
-        [res / 2 + focal * ndc[:, 0], res / 2 - focal * ndc[:, 1]], axis=1
-    )
-
-    # flat-shade off a headlight; abs() keeps back-facing triangles from going black
-    shade = np.abs(mesh.face_normals @ forward) * 0.75 + 0.25
-    shaded = np.clip(np.asarray(color, dtype=float) * shade[:, None], 0, 1)
-
-    zbuf = np.full((res, res), np.inf)
-    image = np.ones((res, res, 3))
-    tri_screen, tri_depth = screen[mesh.faces], depth[mesh.faces]
-    half_edge = 0.7 * supersample / 2  # 0.7px wireframe
-
-    # far to near only to help the cache; the depth buffer is what decides visibility
-    for i in np.argsort(-tri_depth.mean(axis=1)):
-        p, z = tri_screen[i], tri_depth[i]
-        x0 = max(int(np.floor(p[:, 0].min())), 0)
-        y0 = max(int(np.floor(p[:, 1].min())), 0)
-        x1 = min(int(np.ceil(p[:, 0].max())), res - 1)
-        y1 = min(int(np.ceil(p[:, 1].max())), res - 1)
-        if x1 < x0 or y1 < y0:
-            continue
-
-        # signed area, doubled; also the barycentric denominator
-        area2 = (p[1, 0] - p[0, 0]) * (p[2, 1] - p[0, 1]) - (p[2, 0] - p[0, 0]) * (
-            p[1, 1] - p[0, 1]
-        )
-        if abs(area2) < 1e-9:
-            continue
-
-        xs = np.arange(x0, x1 + 1)[None, :]
-        ys = np.arange(y0, y1 + 1)[:, None]
-        w1 = ((xs - p[0, 0]) * (p[2, 1] - p[0, 1]) - (p[2, 0] - p[0, 0]) * (ys - p[0, 1])) / area2
-        w2 = ((p[1, 0] - p[0, 0]) * (ys - p[0, 1]) - (xs - p[0, 0]) * (p[1, 1] - p[0, 1])) / area2
-        w0 = 1 - w1 - w2
-        bary = np.stack([w0, w1, w2])
-        inside = (bary >= 0).all(axis=0)
-        if not inside.any():
-            continue
-
-        pixel_z = (bary * z[:, None, None]).sum(axis=0)
-        window = zbuf[y0:y1 + 1, x0:x1 + 1]
-        visible = inside & (pixel_z < window)
-        if not visible.any():
-            continue
-        window[visible] = pixel_z[visible]
-
-        # barycentric i scales to pixel distance from the opposite edge by 2*area/len
-        lengths = np.linalg.norm(p[[1, 2, 0]] - p[[2, 0, 1]], axis=1)
-        edge_dist = (bary * (abs(area2) / np.maximum(lengths, 1e-9))[:, None, None]).min(axis=0)
-        tile = image[y0:y1 + 1, x0:x1 + 1]
-        tile[visible] = shaded[i]
-        tile[visible & (edge_dist < half_edge)] = 0.0
-
-    return image.reshape(size, supersample, size, supersample, 3).mean(axis=(1, 3))
+def _camera(model, data, azimuth=-125.0, elevation=-22.0, fit=1.5) -> mujoco.MjvCamera:
+    """Orbit camera framed on the asset's bodies (body 0 is the world)."""
+    mujoco.mj_forward(model, data)
+    visual = [i for i in range(model.ngeom) if model.geom_group[i] == VISUAL_GROUP]
+    centers = data.geom_xpos[visual]
+    radius = model.geom_rbound[visual]
+    lo = (centers - radius[:, None]).min(axis=0)
+    hi = (centers + radius[:, None]).max(axis=0)
+    camera = mujoco.MjvCamera()
+    camera.lookat[:] = (lo + hi) / 2
+    camera.distance = fit * np.linalg.norm(hi - lo) / 2 / np.tan(np.radians(model.vis.global_.fovy / 2)) / 1.6
+    camera.azimuth, camera.elevation = azimuth, elevation
+    return camera
 
 
-def hull_colors(hulls: list[trimesh.Trimesh]) -> np.ndarray:
-    # one colour per convex part so the decomposition is readable
-    palette = plt.get_cmap("tab20")(np.arange(len(hulls)) % 20)[:, :3]
-    return np.concatenate([np.tile(c, (len(h.faces), 1)) for c, h in zip(palette, hulls)])
+def _groups(*visible) -> mujoco.MjvOption:
+    option = mujoco.MjvOption()
+    option.geomgroup[:] = 0
+    option.geomgroup[0] = 1  # floor
+    for g in visible:
+        option.geomgroup[g] = 1
+    return option
 
 
-def visualize(visual: trimesh.Trimesh, hulls: list[trimesh.Trimesh], output_path: str):
-    collision = trimesh.util.concatenate(hulls)
-    fig, axes = plt.subplots(1, 2, figsize=(8, 5))
-    for ax, title, mesh, color in (
-        (axes[0], f"visual  ({len(visual.faces)} faces)", visual, (0.35, 0.55, 0.85)),
-        (axes[1], f"collision  ({len(hulls)} convex parts)", collision, hull_colors(hulls)),
-    ):
-        ax.imshow(render_mesh(mesh, color))
-        ax.set_title(title)
-        ax.set_axis_off()
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    plt.close(fig)
-
-
-def render_drop(scene_path: str, output_path: str, duration: float = 3.0, fps: int = 30):
+def preview(scene_path: str, output_path: str, size=(720, 720)):
+    """Visual mesh next to the collision geometry, one colour per convex part."""
     model = mujoco.MjModel.from_xml_path(scene_path)
     data = mujoco.MjData(model)
-    mujoco.mj_resetDataKeyframe(model, data, model.key("drop").id)
-    drop_height = data.qpos[2]
+    collision = [i for i in range(model.ngeom) if model.geom_group[i] == COLLISION_GROUP]
+    palette = plt.get_cmap("tab20")(np.arange(len(collision)) % 20)
+    for i, colour in zip(collision, palette):
+        model.geom_rgba[i] = colour
+        model.geom_matid[i] = -1
+    camera = _camera(model, data)
+    floor_reflectance = model.mat_reflectance.copy()
+    try:
+        font = ImageFont.load_default(size=26)
+    except TypeError:  # Pillow < 10.1
+        font = ImageFont.load_default()
+    tiles = []
+    with mujoco.Renderer(model, size[1], size[0]) as renderer:
+        for group, title in ((VISUAL_GROUP, "visual"), (COLLISION_GROUP, f"collision ({len(collision)} parts)")):
+            # no floor reflection under the collision view, where it reads as ghost geometry
+            model.mat_reflectance[:] = floor_reflectance if group == VISUAL_GROUP else 0
+            renderer.update_scene(data, camera, scene_option=_groups(group))
+            tile = Image.fromarray(renderer.render())
+            ImageDraw.Draw(tile).text((18, 14), title, fill=(25, 25, 25), font=font)
+            tiles.append(tile)
+    sheet = Image.new("RGB", (size[0] * 2, size[1]))
+    for i, tile in enumerate(tiles):
+        sheet.paste(tile, (i * size[0], 0))
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    sheet.save(output_path)
 
-    camera = mujoco.MjvCamera()
-    mujoco.mjv_defaultCamera(camera)
-    camera.distance, camera.elevation, camera.lookat[2] = (
-        drop_height * 4,
-        -20,
-        drop_height / 2,
-    )
+
+def render_drop(scene_path: str, output_path: str, duration: float = 3.0, fps: int = 30, size=(640, 480)):
+    model = mujoco.MjModel.from_xml_path(scene_path)
+    data = mujoco.MjData(model)
+    camera = _camera(model, data, elevation=-15.0, fit=2.6)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("drop").id)
+    camera.lookat[2] = data.qpos[2] / 2
 
     frames = []
-    with mujoco.Renderer(model, 480, 640) as renderer:
+    with mujoco.Renderer(model, size[1], size[0]) as renderer:
         while data.time < duration:
             mujoco.mj_step(model, data)
             if len(frames) < data.time * fps:
-                renderer.update_scene(data, camera)
+                renderer.update_scene(data, camera, scene_option=_groups(VISUAL_GROUP))
                 frames.append(Image.fromarray(renderer.render()))
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    frames[0].save(
-        output_path,
-        save_all=True,
-        append_images=frames[1:],
-        duration=int(1000 / fps),
-        loop=0,
-    )
+    frames[0].save(output_path, save_all=True, append_images=frames[1:], duration=int(1000 / fps), loop=0)

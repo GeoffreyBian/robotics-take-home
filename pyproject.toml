@@ -4,13 +4,18 @@ version = "0.1.0"
 requires-python = ">=3.9"
 dependencies = [
     "coacd>=1.0.14",
+    "mapbox-earcut>=2.1.0",
     "matplotlib",
     "mujoco",
+    "networkx>=3.2.1",
     "numpy",
     "pillow",
+    "pymeshlab>=2025.7",
     "rtree>=1.4.1",
     "scipy",
+    "shapely>=2.0.7",
     "trimesh",
+    "usd-core>=26.8",
 ]
 
 [build-system]

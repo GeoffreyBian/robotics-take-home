@@ -1,0 +1,36 @@
+{
+  "_note": "Densities in kg/m^3. Friction is a dry static coefficient per material pair, taken from the middle of typical handbook ranges (e.g. Engineering ToolBox); 'default' is used against any material without a listed pair. Appearance is MuJoCo specular/shininess for the classic renderer; opacity < 1 makes clear materials see-through.",
+  "materials": {
+    "steel":         {"density": 7850, "default_friction": 0.40, "specular": 0.6, "shininess": 0.7},
+    "aluminium":     {"density": 2700, "default_friction": 0.40, "specular": 0.6, "shininess": 0.7},
+    "cardboard":     {"density": 700,  "default_friction": 0.45, "specular": 0.05, "shininess": 0.1},
+    "polypropylene": {"density": 905,  "default_friction": 0.30, "specular": 0.3, "shininess": 0.4},
+    "wood":          {"density": 600,  "default_friction": 0.45, "specular": 0.1, "shininess": 0.2},
+    "PET":           {"density": 1380, "default_friction": 0.35, "specular": 0.6, "shininess": 0.8, "opacity": 0.3},
+    "water":         {"density": 1000, "default_friction": 0.10, "specular": 0.5, "shininess": 0.8, "opacity": 0.6},
+    "fabric":        {"density": 150,  "default_friction": 0.50, "specular": 0.05, "shininess": 0.1},
+    "nylon":         {"density": 1150, "default_friction": 0.30, "specular": 0.3, "shininess": 0.4},
+    "polyurethane":  {"density": 1200, "default_friction": 0.60, "specular": 0.2, "shininess": 0.3},
+    "rubber":        {"density": 1100, "default_friction": 0.90, "specular": 0.1, "shininess": 0.2}
+  },
+  "pairs": {
+    "steel|wood": 0.40,
+    "aluminium|wood": 0.40,
+    "cardboard|wood": 0.40,
+    "polypropylene|wood": 0.30,
+    "wood|wood": 0.40,
+    "PET|wood": 0.35,
+    "fabric|wood": 0.50,
+    "nylon|wood": 0.30,
+    "polyurethane|wood": 0.60,
+    "rubber|steel": 0.80,
+    "rubber|aluminium": 0.70,
+    "rubber|cardboard": 0.70,
+    "rubber|polypropylene": 0.60,
+    "rubber|wood": 0.80,
+    "rubber|PET": 0.70,
+    "rubber|fabric": 0.80,
+    "rubber|nylon": 0.60,
+    "rubber|polyurethane": 0.80
+  }
+}
