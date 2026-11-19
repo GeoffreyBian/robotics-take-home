@@ -1,0 +1,12 @@
+[project]
+name = "robotics-take-home"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = [
+    "matplotlib",
+    "mujoco",
+    "numpy",
+    "pillow",
+    "scipy",
+    "trimesh",
+]
