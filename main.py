@@ -1,4 +1,5 @@
 import argparse
+import csv
 import glob
 import os
 
@@ -15,6 +16,7 @@ def main():
     parser.add_argument("--out", default="output")
     parser.add_argument("--collision", choices=sorted(METHODS), default="coacd")
     parser.add_argument("--no-render", action="store_true", help="skip preview.png and drop.gif")
+    parser.add_argument("--no-validate", action="store_true", help="skip the simulation checks")
     args = parser.parse_args()
 
     priors = load_priors(args.priors)
@@ -22,6 +24,7 @@ def main():
     if args.assets:
         paths = [p for p in paths if os.path.splitext(os.path.basename(p))[0] in args.assets]
 
+    rows = []
     for path in paths:
         name = os.path.splitext(os.path.basename(path))[0]
         if name not in priors:
@@ -33,6 +36,7 @@ def main():
             os.path.join(args.out, name),
             collision_method=args.collision,
             render_outputs=not args.no_render,
+            run_validation=not args.no_validate,
         )
         c = summary["collision"]
         print(
@@ -40,6 +44,39 @@ def main():
             f"{c['parts']} parts (vol ratio {c['volume_ratio']:.2f}, {c['seconds']}s)"
             + (f", repairs: {summary['repairs']}" if summary["repairs"] else "")
         )
+        if "validation" in summary:
+            v = summary["validation"]
+            rows.append(validation_row(name, args.collision, v))
+            print("  " + ", ".join(f"{k}={rows[-1][k]}" for k in VALIDATION_COLUMNS[2:]))
+
+    if rows:
+        path = os.path.join(args.out, "validation.csv")
+        with open(path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=VALIDATION_COLUMNS)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"{sum(r['passed'] for r in rows)}/{len(rows)} assets passed; table in {path}")
+
+
+VALIDATION_COLUMNS = [
+    "asset", "collision", "coverage", "rest_tilt_deg", "rest_penetration",
+    "drop_energy_gain", "drop_impact_penetration", "drop_settled", "probe_max_gap", "passed",
+]
+
+
+def validation_row(name: str, method: str, v: dict) -> dict:
+    return {
+        "asset": name,
+        "collision": method,
+        "coverage": round(v["coverage"], 3),
+        "rest_tilt_deg": round(v["rest"]["tilt_deg"], 2),
+        "rest_penetration": round(v["rest"]["penetration"], 4),
+        "drop_energy_gain": round(v["drop"]["energy_gain"], 3),
+        "drop_impact_penetration": round(v["drop"]["impact_penetration"], 4),
+        "drop_settled": v["drop"]["final_speed"] < 0.05 and v["drop"]["final_spin"] < 0.5,
+        "probe_max_gap": round(v["probe"]["max_abs_gap"], 3),
+        "passed": v["passed"],
+    }
 
 
 if __name__ == "__main__":

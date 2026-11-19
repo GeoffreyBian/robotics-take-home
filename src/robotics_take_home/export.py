@@ -66,7 +66,11 @@ def model_xml(
       <geom type="mesh" contype="0" conaffinity="0" group="2" mass="0"/>
     </default>
     <default class="{name}_collision">
-      <geom type="mesh" group="3" mass="0" friction="{prior.friction} 0.005 0.0001"/>
+      <!-- default 0.02 s contact is too soft for small objects (5 cm bolt sank 17% on impact);
+           0.005 s is still >= 2x MuJoCo's default timestep, so it stays stable in any scene.
+           solmix makes ours win when mixed with a default-soft floor in someone else's scene -->
+      <geom type="mesh" group="3" mass="0" friction="{prior.friction} 0.005 0.0001"
+            solref="0.005 1" solmix="100"/>
     </default>
   </default>
   <asset>
@@ -94,6 +98,7 @@ def scene_xml(name: str, drop_height: float, friction: float) -> str:
     x, y, z, w = Rotation.from_euler("XYZ", [25, 35, 0], degrees=True).as_quat()
     return f"""<mujoco model="{name}_scene">
   <include file="model.xml"/>
+  <option timestep="0.001"/>
   <worldbody>
     <light pos="0 0 {drop_height * 3:.4g}" dir="0 0 -1"/>
     <geom name="floor" type="plane" size="10 10 0.1" rgba="0.8 0.8 0.8 1"
@@ -113,7 +118,6 @@ def write_package(
     hulls: list[trimesh.Trimesh],
     props: MassProperties,
     prior: Prior,
-    report: dict,
 ) -> str:
     has_texture, hull_files = write_meshes(name, visual, hulls, os.path.join(out_dir, "meshes"))
     with open(os.path.join(out_dir, "model.xml"), "w") as f:
@@ -122,10 +126,12 @@ def write_package(
     scene_path = os.path.join(out_dir, "scene.xml")
     with open(scene_path, "w") as f:
         f.write(scene_xml(name, drop_height=visual.extents.max() * 2, friction=prior.friction))
+    return scene_path
 
+
+def write_properties(out_dir: str, name: str, props: MassProperties, prior: Prior, report: dict):
     mass = asdict(props)
     mass["center_of_mass"] = props.center_of_mass.tolist()
     mass["inertia"] = props.inertia.tolist()
     with open(os.path.join(out_dir, "properties.json"), "w") as f:
         json.dump({"name": name, "prior": asdict(prior), "mass_properties": mass, **report}, f, indent=2)
-    return scene_path

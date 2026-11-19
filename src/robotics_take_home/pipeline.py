@@ -1,7 +1,7 @@
 import os
 import time
 
-from . import collision, export, physics, render
+from . import collision, export, physics, render, validate
 from .load import load_mesh, repair
 from .priors import Prior
 
@@ -12,6 +12,7 @@ def make_sim_ready(
     out_dir: str,
     collision_method: str = "coacd",
     render_outputs: bool = True,
+    run_validation: bool = True,
 ) -> dict:
     """glb in, MuJoCo asset package out. Returns the summary written to properties.json."""
     name, _ = os.path.splitext(os.path.basename(filepath))
@@ -44,7 +45,10 @@ def make_sim_ready(
     }
 
     os.makedirs(out_dir, exist_ok=True)
-    scene = export.write_package(out_dir, name, visual, hulls, props, prior, report)
+    scene = export.write_package(out_dir, name, visual, hulls, props, prior)
+    if run_validation:
+        report["validation"] = validate.run(out_dir, visual, hulls, prior.longest_m)
+    export.write_properties(out_dir, name, props, prior, report)
     if render_outputs:
         render.visualize(visual, hulls, os.path.join(out_dir, "preview.png"))
         render.render_drop(scene, os.path.join(out_dir, "drop.gif"))

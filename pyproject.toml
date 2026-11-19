@@ -8,6 +8,7 @@ dependencies = [
     "mujoco",
     "numpy",
     "pillow",
+    "rtree>=1.4.1",
     "scipy",
     "trimesh",
 ]
